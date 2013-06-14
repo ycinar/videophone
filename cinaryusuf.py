@@ -19,8 +19,11 @@ import json
 import jinja2
 import webapp2
 import threading
+import time
 from google.appengine.api import channel
 from google.appengine.ext import db
+from google.appengine.api import apiproxy_stub_map
+from google.appengine.api import runtime
 
 jinja_environment = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.dirname(__file__)))
@@ -37,7 +40,8 @@ def generate_random(len):
   return word
 
 def sanitize(key):
-  return re.sub('[^a-zA-Z0-9\-]', '-', key)
+    logging.info('sanitize key: ' + key)
+    return re.sub('[^a-zA-Z0-9\-]', '-', key)
 
 def make_client_id(room, user):
   return room.key().id_or_name() + '/' + user
@@ -75,25 +79,44 @@ def maybe_add_fake_crypto(message):
   return message
 
 def handle_message(room, user, message):
+  logging.info('message is ' + message);
   message_obj = json.loads(message)
   other_user = room.get_other_user(user)
   room_key = room.key().id_or_name();
-  if message_obj['type'] == 'bye':
-    # This would remove the other_user in loopback test too.
-    # So check its availability before forwarding Bye message.
-    room.remove_user(user)
-    logging.info('User ' + user + ' quit from room ' + room_key)
-    logging.info('Room ' + room_key + ' has state ' + str(room))
-  if other_user and room.has_user(other_user):
-    if message_obj['type'] == 'offer':
-      # Special case the loopback scenario.
-      if other_user == user:
-        message = make_loopback_answer(message)
-      # Workaround Chrome bug. 
-      # Insert a=crypto line into offer from FireFox.
-      # TODO(juberti): Remove this call.
-      message = maybe_add_fake_crypto(message)
-    on_message(room, other_user, message)
+
+  if message_obj['type'] == 'registeration':
+      logging.info('Register new user')
+  if message_obj['type'] == 'call_to':
+      # logging.info('Making a call to ' + str(message_obj['called_room_key:']))
+      room = Room.get_by_key_name(message_obj['called_room_key'])
+      # lets assume there is no other user, 
+      # lets add ourselves to the room that we are calling
+      room.add_user(user)
+      room.set_connected(user)
+  else:
+      # some improvement here, place elif
+      if message_obj['type'] == 'bye':
+        # This would remove the other_user in loopback test too.
+        # So check its availability before forwarding Bye message.
+        room.remove_user(user)
+        logging.info('User ' + user + ' quit from room ' + room_key)
+        logging.info('Room ' + room_key + ' has state ' + str(room))
+      if other_user and room.has_user(other_user):
+        logging.info('user = ' + user + ', other_user = ' + other_user);
+        if message_obj['type'] == 'offer':
+          # Special case the loopback scenario.
+          if other_user == user:
+            message = make_loopback_answer(message)
+          # Workaround Chrome bug. 
+          # Insert a=crypto line into offer from FireFox.
+          # TODO(juberti): Remove this call.
+          message = maybe_add_fake_crypto(message)
+        if message_obj['type'] == 'answer' or message_obj['type'] == 'candidate':
+            usernames = Users.gql("WHERE guser = :userno", userno = other_user)
+            for username in usernames:
+                on_message(Room.get_by_key_name(username.gusername), other_user, message)
+        else:
+            on_message(room, other_user, message)
 
 def get_saved_messages(client_id):
   return Message.gql("WHERE client_id = :id", id=client_id)
@@ -109,6 +132,7 @@ def send_saved_messages(client_id):
   for message in messages:
     channel.send_message(client_id, message.msg)
     logging.info('Delivered saved message to ' + client_id);
+    logging.info('Delivered message is ' + message);
     message.delete()
 
 def on_message(room, user, message):
@@ -116,6 +140,7 @@ def on_message(room, user, message):
   if room.is_connected(user):
     channel.send_message(client_id, message)
     logging.info('Delivered message to user ' + user);
+    logging.info('Delivered message is ' + message);
   else:
     new_message = Message(client_id = client_id, msg = message)
     new_message.put()
@@ -169,6 +194,10 @@ def append_url_arguments(request, link):
 class Message(db.Model):
   client_id = db.StringProperty()
   msg = db.TextProperty()
+
+class Users(db.Model):
+    gusername = db.StringProperty()
+    guser = db.StringProperty()
 
 class Room(db.Model):
   """All the data we store for a room"""
@@ -248,8 +277,10 @@ class Room(db.Model):
 
 class ConnectPage(webapp2.RequestHandler):
   def post(self):
+    logging.info('ConnectPage::post ')
     key = self.request.get('from')
     room_key, user = key.split('/')
+    logging.info('ConnectPage room_key: ' + room_key + ' user: ' + user)
     with LOCK:
       room = Room.get_by_key_name(room_key)
       # Check if room has user in case that disconnect message comes before
@@ -268,7 +299,17 @@ class DisconnectPage(webapp2.RequestHandler):
     key = self.request.get('from')
     room_key, user = key.split('/')
     with LOCK:
+      usernames = Users.gql("WHERE gusername = :userid", userid=room_key)
+      for username in usernames:
+        logging.info('Deleting user ' + username.gusername)
+        username.delete()
+        foundUser = 'true';
+
+      if not (foundUser=='true'):
+        logging.info('UNEXPECTED - Could not find ' + username.gusername)
+
       room = Room.get_by_key_name(room_key)
+
       if room and room.has_user(user):
         other_user = room.get_other_user(user)
         room.remove_user(user)
@@ -277,16 +318,20 @@ class DisconnectPage(webapp2.RequestHandler):
         if other_user and other_user != user:
           channel.send_message(make_client_id(room, other_user), '{"type":"bye"}')
           logging.info('Sent BYE to ' + other_user)
+
     logging.warning('User ' + user + ' disconnected from room ' + room_key)
 
 
 class MessagePage(webapp2.RequestHandler):
   def post(self):
+    logging.info('MessagePage::post ')
     message = self.request.body
     room_key = self.request.get('r')
+    logging.info('MessagePage post room_key' + room_key)
     user = self.request.get('u')
     with LOCK:
       room = Room.get_by_key_name(room_key)
+      logging.info('MessagePage post room ' + str(room))
       if room:
         handle_message(room, user, message)
       else:
@@ -294,13 +339,13 @@ class MessagePage(webapp2.RequestHandler):
 
 class MainPage(webapp2.RequestHandler):
   """The main UI page, renders the 'index.html' template."""
-
   def get(self):
     """Renders the main page. When this page is shown, we create a new
     channel to push asynchronous updates to the client."""
     # get the base url without arguments.
     base_url = self.request.path_url
     room_key = sanitize(self.request.get('r'))
+    logging.info('MainPage room_key=' + room_key)
     debug = self.request.get('debug')
     unittest = self.request.get('unittest')
     stun_server = self.request.get('ss')
@@ -336,7 +381,10 @@ class MainPage(webapp2.RequestHandler):
       redirect = append_url_arguments(self.request, redirect)
       self.redirect(redirect)
       logging.info('Redirecting visitor to base URL to ' + redirect)
-      return
+      return  
+
+    # Database does not sync fast enough
+    time.sleep(2)
 
     user = None
     initiator = 0
@@ -347,6 +395,22 @@ class MainPage(webapp2.RequestHandler):
         user = generate_random(8)
         room = Room(key_name = room_key)
         room.add_user(user)
+
+        gusername = room_key
+        logging.info('gusername = ' + gusername)
+        new_user = Users(gusername = room_key, guser = user)
+        logging.info('Insert username to the database')
+        new_user.put()
+
+        logging.info('room_key :' + room_key)
+        logging.info('Usernames are:')
+        usernames = Users.gql("WHERE gusername != 'a'")
+        contactList = list()
+        i =0;
+        for username in usernames:
+            logging.info(username.gusername)
+            contactList.append(username.gusername.encode("ascii"))
+
         if debug != 'loopback':
           initiator = 0
         else:
@@ -376,17 +440,22 @@ class MainPage(webapp2.RequestHandler):
                        'room_key': room_key,
                        'room_link': room_link,
                        'initiator': initiator,
+                       'usernames': contactList,
                        'pc_config': json.dumps(pc_config),
                        'pc_constraints': json.dumps(pc_constraints),
                        'offer_constraints': json.dumps(offer_constraints),
                        'media_constraints': json.dumps(media_constraints)
                       }
+
+    logging.info('template values: ' + str(template_values))
+
     if unittest:
       target_page = 'test/test_' + unittest + '.html'
     else:
       target_page = 'index.html'
 
     template = jinja_environment.get_template(target_page)
+    logging.info('template with values: ' + str (template.render(template_values)))
     self.response.out.write(template.render(template_values))
     logging.info('User ' + user + ' added to room ' + room_key)
     logging.info('Room ' + room_key + ' has state ' + str(room))
