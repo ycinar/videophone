@@ -125,9 +125,10 @@
                           'OfferToReceiveVideo':true }};
   var isVideoMuted = false;
   var isAudioMuted = false;
+  var g_called_user = '0';
 
   function initialize() {
-    console.log("Initializing; room={{ room_key }}.");
+    console.log("Initializing; me={{ me }}.");
     card = document.getElementById("card");
     localVideo = document.getElementById("localVideo");
     miniVideo = document.getElementById("miniVideo");
@@ -251,12 +252,21 @@
   }
 
   function sendMessage(message) {
+    if (isCaller) {                                                               
+        message.caller = '{{ me }}';                                              
+        message.called_user = g_called_user; //document.getElementById("tx_contact_to_call").value;
+    }                                                                             
+    else                                                                          
+    {                                                                             
+        message.called_user = '{{ me }}';                                         
+        message.caller = g_called_user; //document.getElementById("tx_contact_to_call").value;     
+    }                                                                             
+
     var msgString = JSON.stringify(message);
     console.log('sendMessage C->S: ' + msgString);
-    if (isCaller)
-        path = '/message?r=' + document.getElementById("tx_contact_to_call").value + '&u={{ me }}';
-    else
-        path = '/message?r={{ room_key }}' + '&u={{ me }}';
+
+    path = '/message?u={{ me }}';
+    
     var xhr = new XMLHttpRequest();
     xhr.open('POST', path, true);
     xhr.send(msgString);
@@ -264,6 +274,11 @@
 
   function processSignalingMessage(message) {
     var msg = JSON.parse(message);
+
+    if(!isCaller)
+    {
+        g_called_user = msg.caller;
+    }
 
     if (msg.type === 'offer') {
       // Callee creates PeerConnection
@@ -551,22 +566,26 @@
     return sdpLines;
   }
 
-  function CallContact()
+  function CallContact(call_to)
   {
-      initiator = 1;
+    g_called_user = call_to;
+    initiator = 1;
     isCaller = true;
-    var call_to = document.getElementById("tx_contact_to_call");
-    console.log("Call " + call_to.value);
-    //sendMessage({type: 'call_to', called_room_key: call_to.value});
+    //var call_to = document.getElementById("tx_contact_to_call");
+    console.log("Call " + call_to);
+    sendMessage({type: 'call_to', caller: {{ me }}, called_user: call_to});
 
+/*
     var msgString = JSON.stringify({type: 'call_to', called_room_key: call_to.value});
-    console.log('sendMessage C->S: ' + msgString);
-    path = '/message?r={{ room_key }}' + '&u={{ me }}';
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', path, true);
-    xhr.send(msgString);
+    console.log('sendMessage C->S: ' + msgString);                                    
+    path = '/message?r={{ room_key }}' + '&u={{ me }}';                               
+    var xhr = new XMLHttpRequest();                                                   
+    xhr.open('POST', path, true);                                                     
+    xhr.send(msgString);                                                              
+*/
 
     maybeStart();
+
   }
 
   function addContactList()
@@ -578,7 +597,7 @@
           var table = document.getElementById("contact_list1");
           var row = table.insertRow(0);
           var cell = row.insertCell(0);
-          cell.innerHTML = usernames[i];
+          cell.innerHTML =  "<button onclick=\"CallContact(\'" + usernames[i] + "\')\">" + usernames[i]  + "</button>";
       }
   }
 
@@ -635,6 +654,6 @@
   </div>
 </div>
 <input name="tx_name_to_call" id="tx_contact_to_call" type="text" maxlength="25" size="20" placeholder="Enter name to call"/></h1>
-<button type="button" onclick="CallContact()">Call</button>
+<!-- button type="button" onclick="CallContact()">Call</button -->
 </body>
 </html>
