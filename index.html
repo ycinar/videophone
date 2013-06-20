@@ -610,7 +610,9 @@
       for (i=0; i< usernames.length; i++) {
           var row = table.insertRow(0);
           var cell = row.insertCell(0);
-          cell.innerHTML =  "<button onclick=\"CallContact(\'" + usernames[i] + "\')\">" + usernames[i]  + "</button>";
+          if (usernames[i] != {{ me }} ) {
+              cell.innerHTML =  "<button onclick=\"CallContact(\'" + usernames[i] + "\')\">" + usernames[i]  + "</button>";
+          }
       }
   }
 
