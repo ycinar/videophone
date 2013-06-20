@@ -103,9 +103,13 @@ def handle_message(user, message):
       if message_obj['type'] == 'offer':
           message = maybe_add_fake_crypto(message)
       if (user==message_obj['called_user']):
-          other_user = message_obj['caller']
+          if 'caller' in message_obj:
+              other_user = message_obj['caller']
+          else:
+              other_user = '0'
       elif (user==message_obj['caller']):
-          other_user = message_obj['called_user']
+          if message_obj['called_user']:
+              other_user = message_obj['called_user']
       else:
           logging.info('Unknown user; called_user:' + str(message_obj['called_user']) + ' caller:' + str(message_obj['caller']) + ' conpared user:' + user)
           return
