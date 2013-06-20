@@ -298,6 +298,8 @@ class DisconnectPage(webapp2.RequestHandler):
 
       # If the disconnected user was in a call, send bye message to the other user
     logging.warning('User ' + user + ' disconnected.')
+    time.sleep(3)
+    update_contact_lists()
 
 class MessagePage(webapp2.RequestHandler):
   def post(self):
