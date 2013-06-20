@@ -276,18 +276,7 @@ class ConnectPage(webapp2.RequestHandler):
     logging.info('ConnectPage::post ')
     user = self.request.get('from')
     logging.info('ConnectPage key: ' + str(user))
-    #room_key, user = key.split('/')
-    #with LOCK:
-      #room = Room.get_by_key_name(room_key)
-      # Check if room has user in case that disconnect message comes before
-      # connect message with unknown reason, observed with local AppEngine SDK.
-      #if room and room.has_user(user):
-        #room.set_connected(user)
-        #send_saved_messages(make_client_id(room, user))
-        #logging.info('User ' + user + ' connected to room ' + room_key)
-        #logging.info('Room ' + room_key + ' has state ' + str(room))
-      #else:
-        #logging.warning('Unexpected Connect Message to room ' + room_key)
+    update_contact_lists()
 
 class DisconnectPage(webapp2.RequestHandler):
   def post(self):
@@ -320,6 +309,20 @@ class MessagePage(webapp2.RequestHandler):
         handle_message(user, message)
       else:
         logging.warning('Unknown user ' + user)
+
+def update_contact_lists():
+    contacts = Users.gql("WHERE guserid != 'a'")
+    contactList = list()
+    for contact in contacts:
+        logging.info(contact.gusername)
+        if (contact.gusername==contact.guserid):
+          contactList.append(contact.gusername.encode("ascii"))
+        else:
+          contactList.append(contact.gusername.encode("ascii") + "-" + contact.guserid.encode("ascii"))
+    contact_values = {'type': 'contact_list', 'usernames': contactList}
+    for contact in contacts:
+        logging.info('sending to ' + contact.guserid + ', message is ' + json.dumps(contact_values))
+        channel.send_message(contact.guserid, json.dumps(contact_values))
 
 class MainPage(webapp2.RequestHandler):
   """The main UI page, renders the 'index.html' template."""
@@ -373,13 +376,19 @@ class MainPage(webapp2.RequestHandler):
         logging.info('Insert username to the database')
         new_user.put()
 
+        time.sleep(2)
+        update_contact_lists()
+
         logging.info('Usernames are:')
-        usernames = Users.gql("WHERE guserid != 'a'")
+        contacts = Users.gql("WHERE guserid != 'a'")
         contactList = list()
         i =0;
-        for username in usernames:
-            logging.info(username.gusername)
-            contactList.append(username.gusername.encode("ascii"))
+        for contact in contacts:
+            logging.info(contact.gusername)
+            if (contact.gusername==contact.guserid):
+              contactList.append(contact.gusername.encode("ascii"))
+            else:
+              contactList.append(contact.gusername.encode("ascii") + "-" + contact.guserid.encode("ascii"))
 
         if debug != 'loopback':
           initiator = 0

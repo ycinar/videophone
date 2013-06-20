@@ -2,7 +2,7 @@
 <html>
 <head>
 <title>WebRTC Reference App</title>
-<h1>Welcome to your Video streaming site</h1>
+<h1>Welcome to your Video streaming site, {{ me }}</h1>
 <link rel="canonical" href="{{ room_link }}"/>
 <meta http-equiv="X-UA-Compatible" content="chrome=1"/>
 <script src="/_ah/channel/jsapi"></script>
@@ -295,7 +295,12 @@
       pc.addIceCandidate(candidate);
     } else if (msg.type === 'bye' && started) {
       onRemoteHangup();
+    } else if(msg.type == 'contact_list')
+    {
+        console.log('contact list arrived.');
+        updateContactList(msg.usernames);
     }
+
   }
 
   function onChannelOpened() {
@@ -568,33 +573,41 @@
 
   function CallContact(call_to)
   {
-    g_called_user = call_to;
+    g_called_user = call_to.substring(call_to.indexOf("-")+1);
     initiator = 1;
     isCaller = true;
     //var call_to = document.getElementById("tx_contact_to_call");
     console.log("Call " + call_to);
     sendMessage({type: 'call_to', caller: {{ me }}, called_user: call_to});
 
-/*
-    var msgString = JSON.stringify({type: 'call_to', called_room_key: call_to.value});
-    console.log('sendMessage C->S: ' + msgString);                                    
-    path = '/message?r={{ room_key }}' + '&u={{ me }}';                               
-    var xhr = new XMLHttpRequest();                                                   
-    xhr.open('POST', path, true);                                                     
-    xhr.send(msgString);                                                              
-*/
-
     maybeStart();
 
   }
 
-  function addContactList()
+  function getContactList()
   {
       usernames = {{ usernames | safe }};
       var i;
       console.log("Length of contact list is " + usernames.length);
       for (i=0; i< usernames.length; i++) {
           var table = document.getElementById("contact_list1");
+          var row = table.insertRow(0);
+          var cell = row.insertCell(0);
+          cell.innerHTML =  "<button onclick=\"CallContact(\'" + usernames[i] + "\')\">" + usernames[i]  + "</button>";
+      }
+  }
+
+  function updateContactList(usernames)
+  {
+      console.log("usernames are " + usernames);
+      //usernames = {{ usernames | safe }};
+      var i;
+      console.log("Length of contact list is " + usernames.length);
+      console.log("contact list is " + usernames);
+
+      var table = document.getElementById("contact_list1");
+      table.innerHTML = "";
+      for (i=0; i< usernames.length; i++) {
           var row = table.insertRow(0);
           var cell = row.insertCell(0);
           cell.innerHTML =  "<button onclick=\"CallContact(\'" + usernames[i] + "\')\">" + usernames[i]  + "</button>";
@@ -625,7 +638,7 @@
                     <!-- button type="button" onclick="SubmitMyName">Submit</button -->
             </td>
             <td>
-                <button type="button" onclick="addContactList()">GetContact</button>
+                <!-- button type="button" onclick="getContactList()">GetContact</button -->
             </td>
         </tr>
     	<tr>
@@ -633,7 +646,7 @@
       			<video width="320" height="240" id="localVideo" autoplay="autoplay" muted="true"/>
       		</td>
     		<td>
-      			<video width="320" height="240" id="remoteVideo" autoplay="autoplay" muted="true"/>
+      			<video width="320" height="240" id="remoteVideo" autoplay="autoplay"/>
       		</td>
             <td>
                 <table id="contact_list1">	
