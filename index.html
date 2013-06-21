@@ -2,7 +2,7 @@
 <html>
 <head>
 <title>WebRTC Reference App</title>
-<h1>Welcome to your Video streaming site, {{ me }}</h1>
+<h1 id="header"> Welcome to your Video streaming site, {{ me }}</h1>
 <link rel="canonical" href="{{ room_link }}"/>
 <meta http-equiv="X-UA-Compatible" content="chrome=1"/>
 <script src="/_ah/channel/jsapi"></script>
@@ -102,6 +102,35 @@
 
 </style -->
 
+<style type="text/css">
+    .overlay
+    {
+       background-color: #000;
+       opacity: .7;
+       filter: alpha(opacity=70);
+       position: absolute; top: 0; left: 0;
+       width: 100%; height: 100%;
+       z-index: 10;
+    }
+
+    .username_input
+    {
+        position: absolute;
+        z-index: 11;
+        left: 40%;
+        top: 50%;
+
+        width:250px;
+        height: 40px;
+        display:block;
+        
+        background-color: white;
+        font-size: 20;
+        margin: 0;
+        padding: 0;
+    }
+</style>
+
 </head>
 <body>
 <script type="text/javascript">
@@ -126,6 +155,31 @@
   var isVideoMuted = false;
   var isAudioMuted = false;
   var g_called_user = '0';
+
+  function overlay_username() {
+       var overlay = document.createElement("div");
+       overlay.setAttribute("id","overlay");
+       overlay.setAttribute("class", "overlay");
+       overlay.onclick = restore_from_overlay;
+
+       
+       var username_input = document.createElement("input");
+       username_input.setAttribute("id", "username_input");
+       username_input.setAttribute("placeholder", "Enter your name");
+       username_input.setAttribute("class", "username_input");
+       username_input.onkeypress = SubmitMyName;
+       //username_input.onclick = restore_from_overlay;
+
+       document.body.appendChild(overlay);
+       document.body.appendChild(username_input);
+  }
+
+overlay_username();
+
+  function restore_from_overlay() {
+   document.body.removeChild(document.getElementById("username_input"));
+   document.body.removeChild(document.getElementById("overlay"));
+  }
 
   function initialize() {
     console.log("Initializing; me={{ me }}.");
@@ -321,7 +375,7 @@
 
   function onUserMediaSuccess(stream) {
     console.log("User has granted access to local media.");
-    // Call the polyfill wrapper to attach the media stream to this element.
+    // Call the polyfill wrapper to attach the media stream to this element.x
     attachMediaStream(localVideo, stream);
     localVideo.style.opacity = 1;
     localStream = stream;
@@ -610,7 +664,7 @@
       for (i=0; i< usernames.length; i++) {
           var row = table.insertRow(0);
           var cell = row.insertCell(0);
-          if (usernames[i] != {{ me }} ) {
+          if (usernames[i].substring(usernames[i].indexOf("-")+1) != {{ me }} ) {
               cell.innerHTML =  "<button onclick=\"CallContact(\'" + usernames[i] + "\')\">" + usernames[i]  + "</button>";
           }
       }
@@ -622,8 +676,16 @@
     if (typeof e == 'undefined' && window.event) { e = window.event; }
     if (e.keyCode == 13)
     {
-        var my_name = document.getElementById("tx_my_name");
+        var my_name;
+        if (document.getElementById("username_input")) {
+          my_name = document.getElementById("username_input");
+          restore_from_overlay();
+        }
+        else {
+            var my_name = document.getElementById("tx_my_name");
+        }
         console.log("My name is " + my_name.value);
+        document.getElementById("header").innerHTML = "Welcome to your Video streaming site, " + my_name.value + " - {{ me }}"
         sendMessage({type: 'registeration', name: my_name.value});
     }
   }
@@ -648,7 +710,7 @@
       			<video width="320" height="240" id="localVideo" autoplay="autoplay" muted="true"/>
       		</td>
     		<td>
-      			<video width="320" height="240" id="remoteVideo" autoplay="autoplay"/>
+      			<video width="640" height="480" id="remoteVideo" autoplay="autoplay"/>
       		</td>
             <td>
                 <table id="contact_list1">	
@@ -668,7 +730,7 @@
   <div id="footer">
   </div>
 </div>
-<input name="tx_name_to_call" id="tx_contact_to_call" type="text" maxlength="25" size="20" placeholder="Enter name to call"/></h1>
+<!-- input name="tx_name_to_call" id="tx_contact_to_call" type="text" maxlength="25" size="20" placeholder="Enter name to call"/ -->
 <!-- button type="button" onclick="CallContact()">Call</button -->
 </body>
 </html>

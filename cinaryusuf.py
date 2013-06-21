@@ -84,6 +84,8 @@ def register_name (user, name):
       foundUser.gusername = name;
       foundUser.put()
       logging.info('Registered ' + foundUser.guserid + ' with name ' + foundUser.gusername);
+      time.sleep(2)
+      update_contact_lists()
 
 def handle_message(user, message):
   logging.info('message is ' + message);
