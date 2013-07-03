@@ -9,99 +9,7 @@
 
 <!-- Load the polyfill to switch-hit between Chrome and Firefox -->
 <script src="/js/adapter.js"></script>
-
-<!--style type="text/css">
-  a:link { color: #ffffff; }
-  a:visited {color: #ffffff; }
-  html, body {
-    background-color: #000000;
-    height: 100%;
-    font-family:Verdana, Arial, Helvetica, sans-serif;
-  }
-  body {
-    margin: 0;
-    padding: 0;
-  }
-  #container {
-    background-color: #000000;
-    position: relative;
-    min-height: 100%;
-    width: 100%;
-    margin: 0px auto;
-    -webkit-perspective: 1000;
-  }
-  #card {
-    -webkit-transition-property: rotation;
-    -webkit-transition-duration: 2s;
-    -webkit-transform-style: preserve-3d;
-  }
-  #local {
-    position: absolute;
-    width: 100%;
-  }
-  #remote {
-    position: absolute;
-    width: 100%;
-    -webkit-transform: rotateY(180deg);
-    -webkit-backface-visibility: hidden;
-  }
-  #mini {
-    position: absolute;
-    height: 30%;
-    width: 30%;
-    bottom: 32px;
-    right: 4px;
-    -webkit-transform: scale(-1, 1);
-    opacity: 1.0;
-  }
-  #localVideo {
-    opacity: 0;
-    -webkit-transition-property: opacity;
-    -webkit-transition-duration: 2s;
-  }
-  #remoteVideo {
-    opacity: 0;
-    -webkit-transition-property: opacity;
-    -webkit-transition-duration: 2s;
-  }
-  #miniVideo {
-    opacity: 0;
-    -webkit-transition-property: opacity;
-    -webkit-transition-duration: 2s;
-  }
-  #footer {
-    spacing: 4px;
-    position: absolute;
-    bottom: 0;
-    width: 100%;
-    height: 28px;
-    background-color: #3F3F3F;
-    color: rgb(255, 255, 255);
-    font-size:13px; font-weight: bold;
-    line-height: 28px;
-    text-align: center;
-  }
-  #hangup {
-   font-size:13px; font-weight:bold;
-   color:#FFFFFF;
-   width:128px;
-   height:24px;
-   background-color:#808080;
-   border-style:solid;
-   border-color:#FFFFFF;
-   margin:2px;
-  }
-  #logo {
-    display: block;
-    top:4;
-    right:4;
-    position:absolute;
-    float:right;
-    opacity: 0.5;
-  }
-
-</style -->
-
+<script type="text/javascript" src="/js/recorder.js"> </script>
 <style type="text/css">
     .overlay
     {
@@ -155,6 +63,8 @@
   var isVideoMuted = false;
   var isAudioMuted = false;
   var g_called_user = '0';
+  var recorder;
+  var audio;
 
   function overlay_username() {
        var overlay = document.createElement("div");
@@ -216,7 +126,7 @@ overlay_username();
     // Call into getUserMedia via the polyfill (adapter.js).
     var constraints = {{ media_constraints|safe }}; 
     try {
-      getUserMedia({'audio':true, 'video':constraints}, onUserMediaSuccess,
+      getUserMedia({'audio':true}, onUserMediaSuccess,
                    onUserMediaError);
       console.log("Requested access to local media with mediaConstraints:\n" +
                   "  \"" + JSON.stringify(constraints) + "\"");
@@ -400,11 +310,24 @@ overlay_username();
   }
 
   function onRemoteStreamAdded(event) {
-    console.log("Remote stream added."); 
-    reattachMediaStream(miniVideo, localVideo);
-    attachMediaStream(remoteVideo, event.stream);
-    remoteStream = event.stream;
-    waitForRemoteVideo();  
+    console.log("Remote stream added.");
+    if (initiator)
+    {
+        // record
+        audio = document.querySelector('audio');
+        console.log("audio = " + audio);
+        var context = new webkitAudioContext();
+        var mediaStreamSource = context.createMediaStreamSource(event.stream);
+        recorder = new Recorder(mediaStreamSource);
+        recorder.record();
+    }
+    else
+    {
+        reattachMediaStream(miniVideo, localVideo);
+        attachMediaStream(remoteVideo, event.stream);
+        remoteStream = event.stream;
+        waitForRemoteVideo();  
+    }
   }
   function onRemoteStreamRemoved(event) {
     console.log("Remote stream removed.");
@@ -426,6 +349,13 @@ overlay_username();
   }
 
   function stop() {
+      console.log("Stopping...");
+    recorder.stop();
+    recorder.exportWAV(function(s) {
+        console.log("audio = " + audio);
+        audio.src = window.URL.createObjectURL(s);
+      });
+      
     started = false;
     isAudioMuted = false;
     isVideoMuted = false;
@@ -691,6 +621,7 @@ overlay_username();
   }
 </script>
 <div id="container" ondblclick="enterFullScreen()"> 
+  <audio controls autoplay></audio>
   <div id="card">
     <div id="local">
     <table border="1" cellpadding="1" cellspacing="1" style="width: 100%;">
