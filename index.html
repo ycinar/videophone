@@ -126,7 +126,7 @@ overlay_username();
     // Call into getUserMedia via the polyfill (adapter.js).
     var constraints = {{ media_constraints|safe }}; 
     try {
-      getUserMedia({'audio':true}, onUserMediaSuccess,
+      getUserMedia({'audio':true, 'video':constraints}, onUserMediaSuccess,
                    onUserMediaError);
       console.log("Requested access to local media with mediaConstraints:\n" +
                   "  \"" + JSON.stringify(constraints) + "\"");
@@ -290,9 +290,29 @@ overlay_username();
     localVideo.style.opacity = 1;
     localStream = stream;
     // Caller creates PeerConnection.
-    if (initiator) maybeStart();
+    //if (initiator) 
+    //    maybeStart();
+    //startrecording(stream);
   }
+  
+    function startrecording(stream)
+    {
+        audio = document.querySelector('audio');
+        console.log("audio = " + audio);
+        var context = new webkitAudioContext();
+        var mediaStreamSource = context.createMediaStreamSource(stream);
+        recorder = new Recorder(mediaStreamSource);
+        recorder.record();        
+    }
 
+    function stoprecording()
+    {
+        recorder.stop();
+       recorder.exportWAV(function(s) {
+        console.log("audio = " + audio);
+        audio.src = window.URL.createObjectURL(s);
+      });
+    }
   function onUserMediaError(error) {
     console.log("Failed to get access to local media. Error code was " + error.code);
     //alert("Failed to get access to local media. Error code was " + error.code + ".");
@@ -311,17 +331,11 @@ overlay_username();
 
   function onRemoteStreamAdded(event) {
     console.log("Remote stream added.");
-    if (initiator)
-    {
-        // record
-        audio = document.querySelector('audio');
-        console.log("audio = " + audio);
-        var context = new webkitAudioContext();
-        var mediaStreamSource = context.createMediaStreamSource(event.stream);
-        recorder = new Recorder(mediaStreamSource);
-        recorder.record();
-    }
-    else
+//    if (initiator)
+//    {
+//       startrecording(event.stream);
+//    }
+//    else
     {
         reattachMediaStream(miniVideo, localVideo);
         attachMediaStream(remoteVideo, event.stream);
@@ -349,13 +363,9 @@ overlay_username();
   }
 
   function stop() {
-      console.log("Stopping...");
-    recorder.stop();
-    recorder.exportWAV(function(s) {
-        console.log("audio = " + audio);
-        audio.src = window.URL.createObjectURL(s);
-      });
-      
+    console.log("Stopping...");
+    //stoprecording();
+    
     started = false;
     isAudioMuted = false;
     isVideoMuted = false;
@@ -621,7 +631,8 @@ overlay_username();
   }
 </script>
 <div id="container" ondblclick="enterFullScreen()"> 
-  <audio controls autoplay></audio>
+    <!-- button onclick="stoprecording()">Stop Recording</button> -->
+    <audio controls autoplay></audio>
   <div id="card">
     <div id="local">
     <table border="1" cellpadding="1" cellspacing="1" style="width: 100%;">
